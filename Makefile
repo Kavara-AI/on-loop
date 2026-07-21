@@ -17,7 +17,7 @@ SHELL := /bin/bash
 help:
 	@printf '%-20s %s\n' "Target" "Description"
 	@printf '%-20s %s\n' "------" "-----------"
-	@printf '%-20s %s\n' "test"      "Run bats test suite (16 cases)"
+	@printf '%-20s %s\n' "test"      "Run all bats test suites"
 	@printf '%-20s %s\n' "lint"      "Run shellcheck on bin/on-loop-tag"
 	@printf '%-20s %s\n' "check"     "Smoke-check bin/on-loop-tag --version"
 	@printf '%-20s %s\n' "install"   "Symlink bin/on-loop-tag to ~/.local/bin/"
@@ -37,7 +37,7 @@ test:
 		printf '  git clone https://github.com/bats-core/bats-core.git && sudo bats-core/install.sh /usr/local\n'; \
 		exit 1; \
 	fi
-	bats --jobs 1 tests/test_on_loop_tag.bats
+	bats --jobs 1 tests/*.bats
 
 # ---------------------------------------------------------------------------
 # lint — shellcheck SAST

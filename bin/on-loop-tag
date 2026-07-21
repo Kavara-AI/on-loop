@@ -365,7 +365,7 @@ Modes (mutually exclusive):
   --force           Bypass the prompt and continue past failed checks. Requires
                     --reason. Failed checks become warnings, not errors.
   --reason <TEXT>   Free-text justification; required with --force, rejected
-                    without it. Logged immutably to the audit log.
+                    without it. Logged to the git-tracked audit record.
 
 Misc:
   -h, --help        Print this help and exit 0.

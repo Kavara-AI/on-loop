@@ -1,106 +1,76 @@
 ---
 name: on-loop-clear
-description: Clean up on-loop workspace, switch to main, and pull latest
+description: Remove on-loop worktrees and optionally session records; never merge PRs
 user_invocable: true
 argument: "[--include-logs]"
 ---
 
 # /on-loop:clear
 
-Clean up on-loop worktrees and optionally session logs, then return to a clean main branch state.
+Clean up on-loop worktrees and, when explicitly requested, session records. Cleanup does not merge or close PRs, delete remote branches, switch branches, or pull from a remote.
 
 ## Usage
 
 ```
-/on-loop:clear                # Clean worktrees only, keep session logs
-/on-loop:clear --include-logs # Also delete session logs
+/on-loop:clear                # Remove worktrees only; keep session records
+/on-loop:clear --include-logs # Also delete session records after confirmation
 ```
 
 ## What This Does
 
-1. Merges associated PRs (blocks if any PR is not mergeable)
-2. Removes all on-loop git worktrees
-3. Optionally deletes `.on-loop/` session logs (with `--include-logs`)
-4. Switches to `main` (or `master` if `main` doesn't exist)
-5. Pulls the latest changes from origin
+1. Inspects session state and warns about active sessions and open PRs
+2. Removes on-loop git worktrees under `.claude/worktrees/`
+3. Marks abandoned active sessions as failed when records are retained
+4. Optionally deletes `.on-loop/` session records after explicit confirmation
+
+**Never merge a PR as a side effect of cleanup.** PR merge/close and remote branch deletion are separate, explicit user actions.
 
 ## Instructions
 
 When this command is invoked:
 
-1. **Merge associated PRs before cleanup**:
-   - Read `.on-loop/index.json` (if it exists)
-   - For each session with `status: "active"` or `status: "complete"` that has a `pr_url`:
-     - Extract the PR number from the URL
-     - Check if the PR is mergeable:
-       ```bash
-       gh pr view <number> --json mergeable,mergeStateStatus,state,title,statusCheckRollup
-       ```
-     - If the PR state is `"MERGED"` — already merged, continue with cleanup
-     - If the PR state is `"CLOSED"` — skip (already closed), continue with cleanup
-     - If `mergeable` is `"MERGEABLE"` and all status checks have passed — merge:
-       ```bash
-       gh pr merge <number> --merge --delete-branch
-       ```
-     - If the PR is **not mergeable** (failing checks, merge conflicts, pending reviews, or `mergeable` is `"CONFLICTING"` / `"UNKNOWN"`):
-       - **STOP** and report:
-         ```
-         Cannot clear: PR #<number> (<title>) is not mergeable.
-         Reason: <merge state status / failing checks>
-         
-         Resolve the PR before running /on-loop:clear, or close it manually with:
-           gh pr close <number>
-         ```
-       - Do NOT remove any worktrees or clean up. Exit immediately.
-   - For sessions without a `pr_url` that have `status: "active"`, warn the user:
-     ```
-     Session <session-name> has no PR. It will be marked as failed during cleanup.
-     ```
+1. **Validate arguments**:
+   - Accept no arguments or exactly `--include-logs`.
+   - Reject all other arguments without changing anything.
 
-2. **List and remove on-loop worktrees**:
-   ```bash
-   git worktree list
-   ```
-   - Identify any worktrees under `.claude/worktrees/`
-   - For each on-loop worktree:
+2. **Inspect before changing anything**:
+   - Read `.on-loop/index.json` if it exists.
+   - List active sessions, their worktree paths, and any `pr_url` values.
+   - List registered worktrees with `git worktree list --porcelain`.
+   - Identify only worktrees whose resolved paths are descendants of the repository's `.claude/worktrees/` directory. Do not remove the primary checkout or unrelated worktrees.
+   - Warn that active sessions will be abandoned. Report linked PRs as untouched; do not query, merge, close, or modify them.
+
+3. **Confirm destructive scope**:
+   - Ask for explicit confirmation before removing worktrees when any active session or uncommitted worktree changes exist.
+   - If `--include-logs` is present, separately state that `.on-loop/sessions/` and the session index will be deleted and require explicit confirmation.
+   - If confirmation is declined or unavailable, stop without changing anything.
+
+4. **Remove identified on-loop worktrees**:
+   - For each verified path, first run `git status --short` in that worktree and report any uncommitted changes.
+   - Remove the registered worktree with:
      ```bash
-     git worktree remove .claude/worktrees/<slug> --force
+     git worktree remove <verified-worktree-path> --force
      ```
-   - Clean up any remnant directories:
-     ```bash
-     rm -rf .claude/worktrees/
-     ```
+   - Run `git worktree prune` after removals.
+   - Remove `.claude/worktrees/` only if it is empty. Never use an unverified slug in `rm -rf`.
 
-3. **Update session index**: If `.on-loop/index.json` exists, update any `"active"` sessions to `"failed"` (they were abandoned by the clear)
+5. **Update retained session records**:
+   - Unless `--include-logs` was selected, update each removed worktree's active session to `status: "failed"` and set an error explaining that `/on-loop:clear` abandoned the worktree.
+   - Leave complete and already-failed session records unchanged.
 
-4. **Delete session logs** (only if `--include-logs` is passed):
-   ```bash
-   rm -rf .on-loop/
-   ```
-   - Warn the user that this removes all session history
+6. **Delete records only with `--include-logs`**:
+   - After the separate confirmation, delete `.on-loop/sessions/` and reset or remove `.on-loop/index.json` as appropriate.
+   - Preserve unrelated `.on-loop/` content, including `.on-loop/release-log.json`. The release record is outside this command's scope.
 
-5. **Determine default branch**: Check if `main` or `master` is the default branch
-   ```bash
-   git rev-parse --verify main 2>/dev/null && echo main || echo master
-   ```
-
-6. **Switch to default branch**:
-   ```bash
-   git checkout <default-branch>
-   ```
-
-7. **Pull latest**:
-   ```bash
-   git pull origin <default-branch>
-   ```
-
-8. **Confirm to user**: Report:
-   - Number of worktrees removed
-   - Whether session logs were deleted
-   - Current branch and that it's up to date with origin
+7. **Report**:
+   - Worktrees removed and any failures
+   - Active sessions marked failed
+   - Whether session records were deleted
+   - PR URLs left untouched
+   - Current branch, explicitly noting that cleanup did not switch or update it
 
 ## Error Handling
 
-- If there are uncommitted changes on the current branch, warn the user before switching branches. Ask if they want to stash or discard changes.
-- If `git pull` fails (e.g., no remote), warn but don't fail — the cleanup is still successful.
-- If worktree removal fails, try force removal. If that also fails, report which worktrees couldn't be removed.
+- If a worktree path cannot be proven to be under `.claude/worktrees/`, skip it and report the path.
+- If removal fails, report the worktree and stop before deleting records.
+- Never merge or close a PR, delete a remote branch, switch branches, pull, or reset as recovery from a cleanup error.

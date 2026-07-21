@@ -5,7 +5,7 @@ description: File-level locking with TTL, heartbeat, and stale lock detection fo
 
 # Roadmap Lock Management
 
-This skill manages file-level locking for multi-session coordination during roadmap execution. Locks prevent multiple sessions from working on conflicting steps simultaneously.
+This skill manages file-level locking for multi-session coordination during roadmap execution. These locks are advisory JSON records, not atomic cross-process locks: they signal intent to work on a step but cannot by themselves guarantee mutual exclusion. Run one roadmap-writing session per feature at a time; see [`commands/on-continue.md`](../../commands/on-continue.md) for the concurrency limitation and its follow-up requirements.
 
 ## Lock Storage
 

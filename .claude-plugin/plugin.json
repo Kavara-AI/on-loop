@@ -1,12 +1,12 @@
 {
   "name": "on-loop",
   "version": "0.6.1",
-  "description": "Spec-driven SDLC plugin for Claude Code — orchestrates specialist agents through a full development lifecycle with security-first engineering practices",
-  "keywords": ["sdlc", "agents", "security", "spec-driven", "orchestration", "code-review", "testing"],
+  "description": "Mirepoix Claude Code SDLC workflow and bootstrap plugin with specialist agent prompts",
+  "keywords": ["sdlc", "agents", "security", "spec-driven", "workflow", "code-review", "testing"],
   "author": {
-    "name": "joestein"
+    "name": "Mirepoix-AI"
   },
   "license": "Apache-2.0",
-  "repository": "https://github.com/joestein/on-loop",
-  "homepage": "https://github.com/joestein/on-loop#readme"
+  "repository": "https://github.com/Mirepoix-AI/on-loop",
+  "homepage": "https://github.com/Mirepoix-AI/on-loop#readme"
 }

@@ -2,6 +2,8 @@
 
 **TL;DR** -- On-loop v0.2.0 adds three new commands that turn Claude Code into a multi-session, multi-person development workflow. `/on-prepare` generates a roadmap from your prompt. `/on-plan` turns it into parallelism-annotated steps. `/on-continue` picks up the next available step and builds it -- and three people can run it at the same time on the same repo without stepping on each other.
 
+> **Editor's note (2026-07-21):** The concurrent multi-session behavior described in this post overstates current guarantees. The JSON read/write lock protocol is not atomic across Claude Code processes, so it cannot prevent conflicting roadmap writes. Run only one roadmap-writing `/on-continue` session per feature at a time. See [`commands/on-continue.md`](../../commands/on-continue.md) for the authoritative concurrency limitation and its follow-up requirements.
+
 ---
 
 ## The Problem With Long-Running Features
@@ -178,19 +180,19 @@ graph LR
 
 ## Install On-Loop
 
-On-loop is an open-source Claude Code plugin. Get it at [github.com/joestein/on-loop](https://github.com/joestein/on-loop).
+On-loop is an open-source Claude Code workflow/bootstrap plugin. Get it at [github.com/Mirepoix-AI/on-loop](https://github.com/Mirepoix-AI/on-loop).
 
 ### From the Plugin Marketplace
 
 ```
-/plugin marketplace add git@github.com:joestein/plugin-testing.git
+/plugin marketplace add Mirepoix-AI/on-loop
 /plugin install on-loop
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/joestein/on-loop.git ~/.claude/plugins/on-loop
+git clone https://github.com/Mirepoix-AI/on-loop.git ~/.claude/plugins/on-loop
 ```
 
 Once installed, you have access to all on-loop commands: `/on-loop`, `/on-prepare`, `/on-plan`, `/on-continue`, `/on-pause`, and the standalone agent commands (`/on-spec`, `/on-test`, `/on-security`, `/on-doc`, `/on-build`, `/on-review`).
@@ -209,4 +211,4 @@ The tools to build complex features are here. Now we build the features.
 
 ---
 
-*On-loop is open source under Apache 2.0. Source: [github.com/joestein/on-loop](https://github.com/joestein/on-loop)*
+*On-loop is open source under Apache 2.0. Source: [github.com/Mirepoix-AI/on-loop](https://github.com/Mirepoix-AI/on-loop)*

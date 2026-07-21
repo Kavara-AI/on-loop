@@ -16,7 +16,7 @@ on-loop-tag <TAG> -m <MESSAGE> --force --reason "<TEXT>"
 
 ## Description
 
-`on-loop-tag` creates a signed annotated tag (`git tag -s`) only after eight pre-flight checks all pass. Every invocation — success, refusal, or emergency bypass — is written as a structured NDJSON line to `.on-loop/release-log.json`, which is committed to git as an immutable audit trail.
+`on-loop-tag` creates a signed annotated tag (`git tag -s`) only after eight pre-flight checks all pass. Every invocation—success, refusal, or emergency bypass—is written as a structured NDJSON line to `.on-loop/release-log.json`, which is intended to be committed as a git-tracked release record. Git history makes committed changes reviewable but does not make the file immutable.
 
 The script exists because of the 2026-05-20 v0.2.3 ship incident: untracked `.on-loop/sessions/` files caused `git pull` to abort silently (git refuses to overwrite untracked paths), leaving the local branch one commit behind `origin/main`. The developer did not notice, ran the tag command, and `v0.2.3` was signed against the previous release's commit. The Quay image for v0.2.3 therefore contained v0.2.2 code. Layer 1 makes that failure mode unreachable under the default workflow — check 5 (`no_session_untracked`) and check 6 (`main_synced`) together catch the exact precondition — and the only escape hatch is an audited, reason-bearing `--force` that is visible in every subsequent `git log` and PR review.
 
@@ -68,7 +68,7 @@ on-loop-tag v0.6.2 -m "hotfix: critical prod regression" \
   --force --reason "CI infrastructure down, hotfix for prod outage INC-4892"
 ```
 
-The `--reason` text is logged immutably. It is visible in every `git log --follow .on-loop/release-log.json` and in the PR diff.
+The `--reason` text is written to the git-tracked release log. It is visible in every `git log --follow .on-loop/release-log.json` and in the PR diff, so the committed history is reviewable.
 
 Pre-release tags (e.g., `v0.7.0-rc1`) work identically across all three modes.
 

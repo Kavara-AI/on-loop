@@ -2,7 +2,7 @@
 
 ## Workspace: `.on-loop/`
 
-All inter-agent communication happens through the `.on-loop/` directory in the project root. Each `/on-loop` invocation creates a **session** — a subdirectory under `.on-loop/sessions/` that persists as an audit log in the repo.
+The workflow directs inter-agent communication through the `.on-loop/` directory in the project root. Each `/on-loop` invocation creates a **session** under `.on-loop/sessions/` intended to be committed as an editable operational record, not an immutable or mechanically complete audit log.
 
 ## Session Directory Naming
 
@@ -39,7 +39,7 @@ Each session also has a UUID (`session_id`) for lock coordination, but the **dir
 
 ## Worktree Isolation
 
-Each session operates in a **git worktree** at `.claude/worktrees/<branch-slug>/`. This allows multiple sessions to run concurrently on the same repo without interfering with each other or the user's working directory.
+Each session operates in a **git worktree** at `.claude/worktrees/<branch-slug>/`. This isolates checked-out feature files between sessions and from the user's working directory. Shared session and roadmap metadata are still ordinary files without atomic cross-process coordination; see [`commands/on-continue.md`](../commands/on-continue.md) for the concurrency limitation.
 
 ```
 .claude/worktrees/                  # gitignored, temporary
@@ -49,7 +49,8 @@ Each session operates in a **git worktree** at `.claude/worktrees/<branch-slug>/
 
 - Agents read/write **feature code** in the worktree
 - Agents read/write **session state** in the original repo root (`.on-loop/sessions/<id>/`)
-- Worktrees are removed on COMPLETE, left in place on FAILED (for resume)
+- `/on-loop` and `/on-loop-continue` retain worktrees on COMPLETE and FAILED for continuation, inspection, or resume
+- `/on-loop:clear` is the explicit removal path and never merges PRs
 
 ## index.json Schema
 
@@ -102,7 +103,8 @@ Each session operates in a **git worktree** at `.claude/worktrees/<branch-slug>/
   "phases_completed": [],
   "current_agent": "<agent name>",
   "error": null,
-  "todos": []
+  "todos": [],
+  "waivers": []
 }
 ```
 
@@ -110,7 +112,7 @@ Each session operates in a **git worktree** at `.claude/worktrees/<branch-slug>/
 
 - **Only the orchestrator writes `state.json`**. All other agents read it.
 - Phase transitions must follow the valid sequence (see `skills/loop-state/SKILL.md`).
-- When a retry limit is exhausted, the orchestrator records a TODO and advances to the next phase.
+- When a TEST, SECURITY, or REVIEW retry limit is exhausted, the orchestrator records unresolved issues, sets the session to `FAILED`, and stops. It advances only after an explicit human waiver is recorded in `state.json.waivers` and `changes.log` as specified by `skills/quality-gate/SKILL.md`.
 
 ## plan.md Format
 

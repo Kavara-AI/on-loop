@@ -276,30 +276,11 @@ For each failed check:
 
 2. If the PR is not mergeable, also note the reason (merge conflicts, review required, etc.).
 
-3. **Version Bump** (idempotent):
-   - Read `.claude-plugin/plugin.json`. Check the current `"version"` value.
-   - Read `.claude-plugin/marketplace.json`. Check the current `"version"` value in the plugins array.
-   - **If both are already `"0.5.0"`**, skip the bump and report:
-     ```
-     Version already at 0.5.0 -- no bump needed.
-     ```
-   - **If either is `"0.4.0"`**, update both files:
-     - In `.claude-plugin/plugin.json`: change `"version": "0.4.0"` to `"version": "0.5.0"`
-     - In `.claude-plugin/marketplace.json`: change `"version": "0.4.0"` to `"version": "0.5.0"` (in the plugins array entry)
-   - Stage and commit:
-     ```bash
-     git add .claude-plugin/plugin.json .claude-plugin/marketplace.json
-     git commit -m "Bump plugin version to 0.5.0
-
-     Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
-     git push
-     ```
-   - Report:
-     ```
-     Version bumped: 0.4.0 -> 0.5.0
-       .claude-plugin/plugin.json
-       .claude-plugin/marketplace.json
-     ```
+3. **Version Consistency Check**:
+   - Read `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`.
+   - Verify their version values match. The current release metadata is `0.6.1`.
+   - If they differ, report the mismatch and stop; do not invent or automatically bump a release version.
+   - If they match, report the version. Version changes belong to the explicit release process and must not be a side effect of checking a PR.
 
 ## Important
 
@@ -307,4 +288,4 @@ For each failed check:
 - Failed test logs from `gh run view --log-failed` may contain secrets. Do NOT persist these logs to files. Only display them in the terminal and pass relevant excerpts to the coding agent as inline context.
 - The coding agent is dispatched at most once per invocation. If the fix fails, report the failure and suggest manual intervention. Do not retry automatically.
 - Always validate branch name input against `^[a-zA-Z0-9._/-]+$` before using in any shell command.
-- The version bump only happens on the full success path (all checks pass). Regressions or mixed failures do not trigger a version bump.
+- This command validates version consistency but never bumps versions; release version changes are separate explicit work.

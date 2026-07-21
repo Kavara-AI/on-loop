@@ -60,7 +60,7 @@ All paths below use `<session-dir>` to refer to the active session directory (e.
 | Error path tests exist | Yes |
 
 **On fail (retries remain)**: Transition back to CODE with test feedback.
-**On fail (retries exhausted)**: Record TODO, proceed to SECURITY.
+**On fail (retries exhausted)**: Record unresolved issues, set the session to `FAILED`, and stop. Proceed to SECURITY only after an explicit human waiver is recorded as described below.
 
 ## Gate: SECURITY → DOC/BUILD
 
@@ -74,7 +74,7 @@ All paths below use `<session-dir>` to refer to the active session directory (e.
 | OWASP Top 10 review completed | Yes |
 
 **On fail (retries remain)**: Transition back to CODE with security findings.
-**On fail (retries exhausted)**: Record TODO, proceed to DOC/BUILD.
+**On fail (retries exhausted)**: Record unresolved issues, set the session to `FAILED`, and stop. Proceed to DOC/BUILD only after an explicit human waiver is recorded as described below.
 
 ## Gate: DOC + BUILD → REVIEW
 
@@ -100,7 +100,7 @@ All paths below use `<session-dir>` to refer to the active session directory (e.
 | No CRITICAL issues | Yes |
 
 **On fail (retries remain)**: Transition back to CODE with review feedback.
-**On fail (retries exhausted)**: Record TODO, proceed to GIT with warnings.
+**On fail (retries exhausted)**: Record unresolved issues, set the session to `FAILED`, and stop. Proceed to GIT only after an explicit human waiver is recorded as described below.
 
 ## Gate: GIT → COMPLETE
 
@@ -127,8 +127,20 @@ Total maximum code iterations: 1 (initial) + 3 + 2 + 2 = **8**
 
 ## Exhausted Retry Behavior
 
-When retries are exhausted:
-1. Record all unresolved issues as TODOs in `state.json`
-2. Log the decision: `[timestamp] orchestrator DECISION retry_exhausted — <details>`
-3. Advance to the next phase
-4. The COMPLETE summary will prominently display all TODOs
+When TEST, SECURITY, or REVIEW retries are exhausted:
+1. Record every unresolved issue in `todos` in `state.json`.
+2. Set `phase` to `FAILED` and `error` to `retry_exhausted:<TEST|SECURITY|REVIEW>`.
+3. Append `[timestamp] orchestrator STOP retry_exhausted:<phase> — <details>` to `changes.log`.
+4. Stop and show the human the unresolved issues. Silence, a generic resume request, or a pre-existing TODO is not a waiver.
+5. Continue only after the human explicitly identifies the issues they accept and directs the workflow to proceed. Append this object to `state.json.waivers`:
+   ```json
+   {
+     "phase": "<TEST|SECURITY|REVIEW>",
+     "issues": ["<accepted unresolved issue>"],
+     "waiver_text": "<exact human statement>",
+     "recorded_at": "<ISO 8601>"
+   }
+   ```
+6. Append `[timestamp] orchestrator HUMAN_WAIVER <phase> — <exact human statement>` to `changes.log`, clear the retry-exhaustion error, and transition to the phase that normally follows the waived gate.
+
+A waiver applies only to the listed phase and issues. Include all waivers prominently in the PR body and COMPLETE summary. Never infer or manufacture a waiver.

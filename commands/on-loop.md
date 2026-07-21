@@ -1,6 +1,6 @@
 ---
 name: on-loop
-description: Run a full spec-driven SDLC loop with orchestrated specialist agents
+description: Guide Claude Code through a spec-driven SDLC workflow with specialist agent prompts
 user_invocable: true
 argument: prompt or path to spec file
 ---
@@ -18,7 +18,7 @@ Run a complete spec-driven software development lifecycle for the given prompt.
 
 ## What This Does
 
-Launches the **orchestrator agent** which drives the following pipeline:
+Launches the **orchestrator agent prompt**, which instructs Claude Code to follow this pipeline. The Markdown workflow is not a mechanically enforced executable coordinator:
 
 1. **INIT** — Creates git worktree, session directory, feature branch
 2. **SPEC** — Architect agent generates a detailed specification
@@ -64,7 +64,8 @@ When this command is invoked:
      - `prompt`: the user's prompt
      - `branch`: the branch name
      - `worktree_path`: `.claude/worktrees/<branch-slug>`
-     - `session_dir`: `.on-loop/sessions/<session-id>`
+     - `session_dir`: `.on-loop/sessions/<session-name>`
+     - `waivers`: `[]`
    - Create empty `plan.md` and `changes.log`
    - Update `.on-loop/index.json` (create if missing) — append session entry with `status: "active"`
 
@@ -83,13 +84,13 @@ When this command is invoked:
    - Provide `plan.md`, architect's notes, and coding agent's notes
    - Agent operates within the worktree directory
    - If tests fail and retries remain (max 3), go back to CODE with test feedback
-   - If retries exhausted, record TODOs and continue
+   - If retries are exhausted, record unresolved issues, set the session to `FAILED`, and stop until an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`
 
 10. Update to phase `"SECURITY"` and dispatch the **security agent** (`agents/security.md`):
     - Provide all prior agent notes
     - Agent operates within the worktree directory
     - If CRITICAL/HIGH findings and retries remain (max 2), go back to CODE with security feedback
-    - If retries exhausted, record TODOs and continue
+    - If retries are exhausted, record unresolved issues, set the session to `FAILED`, and stop until an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`
 
 11. Update to phase `"DOC"` and `"BUILD"` — dispatch **documentation** (`agents/documentation.md`) and **build** (`agents/build.md`) agents in parallel.
     - Both agents operate within the worktree directory
@@ -98,7 +99,7 @@ When this command is invoked:
     - Provide all agent notes
     - Agent operates within the worktree directory
     - If REQUEST_CHANGES and retries remain (max 2), go back to CODE with review feedback
-    - If retries exhausted, record TODOs and continue
+    - If retries are exhausted, record unresolved issues, set the session to `FAILED`, and stop until an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`
 
 13. Update to phase `"GIT"` (orchestrator handles directly, from within the worktree):
     - `cd` to the worktree directory
@@ -106,7 +107,7 @@ When this command is invoked:
     - Also stage the session directory: `.on-loop/sessions/<session-name>/`
     - Commit with a descriptive message summarizing the work, ending with `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
     - Push branch to origin with `-u` flag
-    - Create PR via `gh pr create` with title from prompt and body with summary, files changed, test results, security findings, TODOs
+    - Create PR via `gh pr create` with title from prompt and body with summary, files changed, test results, security findings, TODOs, and recorded human waivers
     - Store PR URL in `state.json` as `"pr_url"`
 
 14. Update to phase `"COMPLETE"`:
@@ -117,7 +118,7 @@ When this command is invoked:
     - List files created/modified
     - Report test results
     - Report security findings
-    - List any outstanding TODOs
+    - List any outstanding TODOs and recorded human waivers
     - Display the PR URL
 
 ## Error Handling
@@ -133,7 +134,7 @@ If any phase fails unexpectedly:
 
 - All inter-agent communication goes through `.on-loop/sessions/<session-name>/` files
 - Only the orchestrator writes `state.json`
-- The session directory is committed to the repo as an audit log
+- The session directory is intended to be committed as an editable operational record; it is not an immutable or mechanically complete audit log
 - The worktree at `.claude/worktrees/` is gitignored and temporary
 - Each agent reads `shared/AGENT_PERSONA.md` for the Staff Engineer + ISC2 persona
 - Agent file operations happen in the worktree; session state lives in the original repo root

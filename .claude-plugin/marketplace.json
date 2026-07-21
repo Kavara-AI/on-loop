@@ -1,12 +1,12 @@
 {
   "name": "on-loop-marketplace",
   "owner": {
-    "name": "joestein"
+    "name": "Mirepoix-AI"
   },
   "plugins": [
     {
       "name": "on-loop",
-      "description": "Spec-driven SDLC loop with orchestrated specialist agents",
+      "description": "Mirepoix Claude Code SDLC workflow and bootstrap plugin",
       "source": "./",
       "version": "0.6.1"
     }

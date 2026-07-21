@@ -10,7 +10,7 @@ gh auth login
 
 # 2. Clone the repo
 sudo mkdir -p /var/build && sudo chown "$USER:$USER" /var/build
-git clone https://github.com/UlyssesModel/on-loop.git /var/build/on-loop
+git clone https://github.com/Mirepoix-AI/on-loop.git /var/build/on-loop
 
 # 3. Bootstrap
 bash /var/build/on-loop/setup/fedora-bootstrap.sh

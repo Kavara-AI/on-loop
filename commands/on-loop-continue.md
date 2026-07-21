@@ -1,13 +1,13 @@
 ---
 name: on-loop-continue
-description: Continue work in an existing on-loop worktree — runs full SDLC pipeline, commits and pushes (no new worktree, no new PR)
+description: Guide Claude Code through the SDLC workflow in an existing worktree (no new worktree or PR)
 user_invocable: true
 argument: prompt or path to spec file
 ---
 
 # /on-loop-continue
 
-Run a complete spec-driven SDLC lifecycle **within an existing on-loop worktree**. Reuses the worktree and branch from a prior `/on-loop` session — no new worktree, no new PR.
+Guide Claude Code through the spec-driven SDLC workflow **within an existing on-loop worktree**. This command reuses the worktree and branch from a prior `/on-loop` session—no new worktree or PR—and is not a separate executable coordinator.
 
 ## Usage
 
@@ -39,7 +39,7 @@ Same agent pipeline as `/on-loop`, but reuses the **existing worktree** created 
 | Branch | Creates `on-loop/<slug>` if on main | Uses branch from existing session |
 | PR | Creates a new PR | No PR — just commits and pushes to existing branch/PR |
 | Agent work dir | New worktree directory | Existing worktree directory |
-| Cleanup | Removes worktree on complete | Does NOT remove worktree (may be used again) |
+| Cleanup | Retains worktree on complete | Retains worktree (may be used again) |
 
 ## Instructions
 
@@ -84,6 +84,7 @@ When this command is invoked:
      - `worktree_path`: the existing worktree path
      - `session_dir`: `.on-loop/sessions/<session-name>`
      - `mode`: `"continue"` (distinguishes from regular on-loop sessions)
+     - `waivers`: `[]`
    - Create empty `plan.md` and `changes.log`
    - Update `.on-loop/index.json` — append session entry with `status: "active"`, `mode: "continue"`
 
@@ -102,13 +103,13 @@ When this command is invoked:
    - Provide `plan.md`, architect's notes, and coding agent's notes
    - Agent operates within the **existing worktree directory**
    - If tests fail and retries remain (max 3), go back to CODE with test feedback
-   - If retries exhausted, record TODOs and continue
+   - If retries are exhausted, record unresolved issues, set the session to `FAILED`, and stop until an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`
 
 9. Update to phase `"SECURITY"` and dispatch the **security agent** (`agents/security.md`):
    - Provide all prior agent notes
    - Agent operates within the **existing worktree directory**
    - If CRITICAL/HIGH findings and retries remain (max 2), go back to CODE with security feedback
-   - If retries exhausted, record TODOs and continue
+   - If retries are exhausted, record unresolved issues, set the session to `FAILED`, and stop until an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`
 
 10. Update to phase `"DOC"` and `"BUILD"` — dispatch **documentation** (`agents/documentation.md`) and **build** (`agents/build.md`) agents in parallel.
     - Both agents operate within the **existing worktree directory**
@@ -117,7 +118,7 @@ When this command is invoked:
     - Provide all agent notes
     - Agent operates within the **existing worktree directory**
     - If REQUEST_CHANGES and retries remain (max 2), go back to CODE with review feedback
-    - If retries exhausted, record TODOs and continue
+    - If retries are exhausted, record unresolved issues, set the session to `FAILED`, and stop until an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`
 
 12. Update to phase `"GIT"` (orchestrator handles directly, from within the existing worktree):
     - `cd` to the existing worktree directory
@@ -135,7 +136,7 @@ When this command is invoked:
     - List files created/modified
     - Report test results
     - Report security findings
-    - List any outstanding TODOs
+    - List any outstanding TODOs and recorded human waivers
     - Note: worktree left in place for future use
 
 ## Error Handling
@@ -151,7 +152,7 @@ If any phase fails unexpectedly:
 
 - All inter-agent communication goes through `.on-loop/sessions/<session-name>/` files
 - Only the orchestrator writes `state.json`
-- The session directory is committed to the repo as an audit log
+- The session directory is intended to be committed as an editable operational record; it is not an immutable or mechanically complete audit log
 - The worktree at `.claude/worktrees/` is **reused from a prior `/on-loop` session** — not created or destroyed
 - Each agent reads `shared/AGENT_PERSONA.md` for the Staff Engineer + ISC2 persona
 - Agent file operations happen in the existing worktree; session state lives in the original repo root

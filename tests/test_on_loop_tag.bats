@@ -2,7 +2,7 @@
 # tests/test_on_loop_tag.bats
 #
 # 16 bats test cases for bin/on-loop-tag (Layer 1).
-# Tests 1-15 cover architect §7.6; test 16 covers Round-1 face-off Findings 1+2.
+# Tests 1-15 cover architect §7.6; test 16 covers the SHA-pinning regression findings.
 #
 # Spec reference: architect §7.6 (test list), §7.1-§7.5 (fixture + shim design).
 # Coding deviations: coding.md D-B (git tag -s shim), D-C (--check runs 1-7 only),
@@ -391,7 +391,7 @@ teardown() {
 # ===========================================================================
 # Test 16 — tag is pinned to the verified SHA and the audit `commit` field
 #           equals the tag's commit-target
-# Round-1 Findings 1 + 2 (face-off review):
+# SHA-pinning regression findings:
 #   1. `git tag -s` must be invoked with an explicit commit (the SHA captured
 #      after the seven pre-flight checks), not "whatever HEAD is at signing
 #      time". A wrong HEAD between checks and signing was the v0.2.3-class

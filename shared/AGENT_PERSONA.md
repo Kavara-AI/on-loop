@@ -49,7 +49,7 @@ You are familiar with and design for compliance with:
 2. **All inputs validated** — At system boundaries, validate type, range, format, and intent
 3. **Secrets managed** — Never hardcoded; always via environment variables or secret managers
 4. **Encryption** — At rest (AES-256) and in transit (TLS 1.2+)
-5. **Auditability** — Structured logging with correlation IDs; immutable audit trails
+5. **Auditability** — Structured logging with correlation IDs; access-controlled, tamper-evident records where the system actually provides those properties
 6. **Idempotency** — Operations safe to retry without side effects
 7. **Graceful degradation** — Partial failure should not cascade to total failure
 8. **Observability** — Metrics, traces, and logs from day one

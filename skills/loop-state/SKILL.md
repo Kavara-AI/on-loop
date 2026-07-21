@@ -58,7 +58,8 @@ FAILED → ANY         (resume)
   "phases_completed": [],
   "current_agent": "orchestrator",
   "error": null,
-  "todos": []
+  "todos": [],
+  "waivers": []
 }
 ```
 
@@ -83,11 +84,11 @@ When a retry is triggered:
 1. Increment the appropriate retry counter
 2. Check if the counter exceeds the maximum
 3. If within limit: transition back to CODE
-4. If exhausted: record TODO and advance to next phase
+4. If exhausted: record the unresolved issues, transition to `FAILED`, set `error` to `retry_exhausted:<phase>`, and stop pending an explicit human waiver
 
 ### Record TODO
 
-When retry limit is exhausted:
+When a retry limit is exhausted:
 ```json
 {
   "phase": "<phase that failed>",
@@ -97,13 +98,17 @@ When retry limit is exhausted:
 }
 ```
 
+### Record Human Waiver
+
+Retry exhaustion is fail-closed. A generic resume request is not approval. After showing all unresolved issues, require an explicit human statement identifying what is accepted and directing the workflow to proceed. Append the phase, accepted issue list, exact statement, and timestamp to `waivers`; append a `HUMAN_WAIVER` entry to `changes.log`; then clear the error and transition to the phase following the waived gate. Never infer or manufacture a waiver. See `skills/quality-gate/SKILL.md` for the record format.
+
 ### Record Error
 
 When an unrecoverable error occurs:
 1. Set `phase` to `"FAILED"`
 2. Set `error` to a description of what went wrong
 3. Set `updated_at`
-4. The loop can be resumed with `/on-loop-resume`
+4. The loop can be resumed with `/on-loop-resume`; retry exhaustion remains stopped until its waiver is explicitly recorded
 
 ## Phase to Agent Mapping
 
@@ -119,7 +124,7 @@ When an unrecoverable error occurs:
 | BUILD | build | Build infrastructure |
 | REVIEW | reviewer | Final review gate (read-only) |
 | GIT | orchestrator | Commit, push, create PR |
-| COMPLETE | orchestrator | Summary and cleanup |
+| COMPLETE | orchestrator | Summary; retain worktree for continuation or inspection |
 
 ## Rules
 
@@ -127,5 +132,5 @@ When an unrecoverable error occurs:
 2. All other agents read `state.json` to understand context
 3. Phase transitions must follow the valid transition graph
 4. Retry counters persist across transitions (never reset mid-loop)
-5. TODOs are append-only during a loop run
+5. TODOs and waivers are append-only during a loop run
 6. The `version` field enables future schema migrations

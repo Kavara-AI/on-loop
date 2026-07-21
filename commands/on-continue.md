@@ -1,13 +1,13 @@
 ---
 name: on-continue
-description: Pick up the next available step from the roadmap and execute it through the full agent pipeline
+description: Guide one roadmap step through the agent-prompt workflow
 user_invocable: true
 argument: feature slug (optional -- auto-detects if only one roadmap exists)
 ---
 
 # /on-continue
 
-The workhorse command. Reads the roadmap state, finds the next unclaimed and non-conflicting step, acquires a lock on it, and executes it through the full on-loop agent pipeline (spec->code->test->security->docs->review).
+This workflow command instructs Claude Code to read roadmap state, select one eligible step, record an advisory lock, and guide it through coding, test, security, and review prompts.
 
 ## Usage
 
@@ -16,7 +16,7 @@ The workhorse command. Reads the roadmap state, finds the next unclaimed and non
 /on-continue <feature-slug>   # specify which feature
 ```
 
-Multiple sessions can run `/on-continue` concurrently on the same repo. Each session picks up the next available step that does not conflict with any in-progress work. Each session operates in its own git worktree.
+Each session uses its own git worktree, but the current JSON read/write lock protocol is not atomic across Claude Code processes. Until executable coordination is added, run only one roadmap-writing `/on-continue` session per feature at a time.
 
 ## Instructions
 
@@ -86,6 +86,7 @@ Create the session directory for this step's execution:
    - `branch`: the branch name
    - `worktree_path`: `.claude/worktrees/<branch-slug>`
    - `session_dir`: `.on-loop/sessions/<session-name>`
+   - `waivers`: `[]`
    - Context: phase title, step number, feature name
 3. Write `.on-loop/sessions/<session-name>/plan.md` with:
    - The step's detailed description from the roadmap
@@ -114,6 +115,7 @@ Dispatch the **testing agent** (`agents/testing.md`):
 - Provide coding agent's notes from the session directory
 - Focus tests on the specific files created/modified in this step
 - If tests fail and retry budget allows (max 2 retries for step-level), loop back to coding
+- If retries are exhausted, record unresolved issues, mark the session and step failed, release the advisory lock, and stop. Proceed only after an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`.
 
 **Update heartbeat** after testing completes.
 
@@ -123,6 +125,7 @@ Dispatch the **security agent** (`agents/security.md`):
 - Provide all prior agent notes from the session directory
 - Focus security review on this step's files
 - If CRITICAL findings and retry budget allows (max 1 retry for step-level), loop back to coding
+- If retries are exhausted, record unresolved issues, mark the session and step failed, release the advisory lock, and stop. Proceed only after an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`.
 
 **Update heartbeat** after security completes.
 
@@ -131,6 +134,7 @@ Dispatch the **security agent** (`agents/security.md`):
 Dispatch the **reviewer agent** (`agents/reviewer.md`):
 - Provide all agent notes from the session directory
 - If REQUEST_CHANGES and retry budget allows (max 1 retry for step-level), loop back to coding
+- If retries are exhausted, record unresolved issues, mark the session and step failed, release the advisory lock, and stop. Proceed only after an explicit human waiver is recorded per `skills/quality-gate/SKILL.md`.
 
 **Update heartbeat** after review completes.
 
@@ -161,24 +165,24 @@ After marking the step complete:
    - End with `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 6. Also stage and commit the updated state file `roadmap/.state/<feature-slug>.json`
 
-### 10. Clean Up Worktree
+### 10. Finalize Session
 
 After successful commit:
 
-1. Remove the worktree: `git worktree remove .claude/worktrees/<branch-slug>`
-2. Update `.on-loop/index.json` session status to `"complete"`
+1. Update `.on-loop/index.json` session status to `"complete"`
+2. **Do NOT remove the worktree** — leave it in place for the next `/on-continue` step, inspection, or resume. Worktrees are removed only by explicit `/on-loop:clear` (see AGENTS.md "Worktrees").
 
 ### 11. Handle Failure
 
 If the agent pipeline fails:
 
 1. Mark the step as `failed` in the state file
-2. Release the lock
+2. Release the advisory lock
 3. Remove session from `_global.json`
 4. Update `.on-loop/index.json` session status to `"failed"`
 5. **Do NOT remove the worktree** (available for debugging or resume)
 6. Report the failure with details
-7. The step will be available for retry on the next `/on-continue` invocation
+7. For an unexpected execution error, the step may be retried on a later `/on-continue` invocation. For TEST, SECURITY, or REVIEW retry exhaustion, keep the fail-closed state until an explicit human waiver covering the unresolved issues is recorded; a fresh invocation does not itself waive them.
 
 ### 12. Report
 
@@ -192,19 +196,18 @@ Display to the user:
 - How many steps remain in the current phase
 - Suggest running `/on-continue` again for the next step, or `/on-pause` to stop
 
-## Concurrency Model
+## Concurrency Limitation and Follow-up
 
-When 3 sessions run `/on-continue` simultaneously:
+Worktrees isolate checked-out files, but roadmap state and `_global.json` remain shared ordinary JSON files. The documented read-after-write check cannot guarantee mutual exclusion: two processes can read the same state and overwrite each other's updates. TTL heartbeats also cannot by themselves prove ownership after a crash or delayed writer.
 
-```
-Session A: reads state -> picks step 1 -> locks step 1 -> creates worktree A -> executes -> completes -> removes worktree A
-Session B: reads state -> picks step 2 -> locks step 2 -> creates worktree B -> executes -> completes -> removes worktree B
-Session C: reads state -> step 1 locked, step 2 locked -> picks step 3 -> locks step 3 -> creates worktree C -> executes
-```
+Use one roadmap-writing `/on-continue` session per feature at a time. Reliable multi-session concurrency is deliberately out of scope for this workflow hardening. Its authoritative follow-up requirements are:
 
-Each session has its own worktree and session directory. No interference.
+1. an executable atomic lock/lease or compare-and-swap primitive around every shared-state mutation;
+2. unique ownership tokens checked during heartbeat, transition, and release;
+3. atomic durable writes plus stale-owner/crash recovery semantics; and
+4. multi-process integration tests covering acquisition races, delayed writers, stale lease reclamation, and release by non-owners.
 
-The lock check happens at acquisition time. If two sessions race for the same step, the read-after-write verification ensures only one proceeds.
+Do not claim conflict prevention until those mechanisms and tests exist.
 
 ## Step-Level Retry Budget
 
@@ -222,9 +225,9 @@ This keeps individual step execution bounded in time.
 
 - Each `/on-continue` invocation handles exactly ONE step
 - Each step gets its own worktree and session directory
-- Session directories persist as audit logs in the repo
+- Session directories are editable operational records intended for git; they are not immutable or guaranteed complete
 - State files in `roadmap/.state/` are the persistent record
 - Always commit after a successful step
 - Always release locks, even on failure
-- Worktrees are removed on success, left in place on failure
+- Worktrees are retained on both success and failure; they are removed only by explicit `/on-loop:clear`
 - Heartbeat is updated between each agent phase

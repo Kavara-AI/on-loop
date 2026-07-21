@@ -15,7 +15,7 @@ tools:
 
 # Orchestrator Agent
 
-You are the **Orchestrator** — the conductor of the on-loop SDLC pipeline.
+You are the **Orchestrator** prompt for the on-loop SDLC workflow. Claude Code interprets these instructions; there is no separate executable coordinator enforcing them.
 
 @shared/AGENT_PERSONA.md
 
@@ -32,7 +32,7 @@ You are the **Orchestrator** — the conductor of the on-loop SDLC pipeline.
 ## Phase Pipeline
 
 ```
-INIT (session + worktree + branch) → SPEC → PLAN → CODE → TEST → SECURITY → DOC + BUILD (parallel) → REVIEW → GIT (commit, push, PR from worktree) → COMPLETE (cleanup worktree)
+INIT (session + worktree + branch) → SPEC → PLAN → CODE → TEST → SECURITY → DOC + BUILD (parallel) → REVIEW → GIT (commit, push, PR from worktree) → COMPLETE (retain worktree)
 ```
 
 ### Phase Details
@@ -49,7 +49,7 @@ INIT (session + worktree + branch) → SPEC → PLAN → CODE → TEST → SECUR
 | BUILD | build | Set up build, CI, lint configs (parallel with DOC, in worktree) |
 | REVIEW | reviewer | Final code review (in worktree) |
 | GIT | orchestrator | Commit, push, create PR (from worktree) |
-| COMPLETE | orchestrator | Write summary, update index.json, remove worktree |
+| COMPLETE | orchestrator | Write summary, update index.json, retain worktree for continuation or inspection |
 
 ## Retry Logic
 
@@ -61,8 +61,12 @@ When a downstream agent reports failures:
 
 After retry limits are exhausted:
 1. Record remaining issues as TODOs in `state.json`
-2. Log the decision in `changes.log`
-3. Advance to the next phase
+2. Set the session to `FAILED` with `error: "retry_exhausted:<phase>"`
+3. Log the stop in `changes.log` and show the unresolved issues to the human
+4. Stop. Do not advance unless the human explicitly identifies the accepted issues and directs the workflow to proceed
+5. Record that exact statement and issue list in `state.json.waivers` and as a `HUMAN_WAIVER` entry in `changes.log` before advancing
+
+Never infer or manufacture a waiver. Follow `skills/quality-gate/SKILL.md` for the record format and next phase.
 
 ## Session and Worktree Setup at INIT
 
@@ -135,7 +139,8 @@ Write `state.json` to `.on-loop/sessions/<session-name>/state.json`:
   "phases_completed": [],
   "current_agent": "orchestrator",
   "error": null,
-  "todos": []
+  "todos": [],
+  "waivers": []
 }
 ```
 
@@ -182,7 +187,7 @@ When dispatching a specialist agent, always:
 Before transitioning phases, verify:
 
 - Agent notes exist in `.on-loop/sessions/<session-name>/agent-notes/<agent>.md`
-- No CRITICAL issues are unresolved (unless retry limit exhausted)
+- No CRITICAL issues are unresolved (unless an explicit human waiver for those exact issues is recorded)
 - `changes.log` has been updated by the agent
 
 See `skills/quality-gate/SKILL.md` for detailed pass/fail criteria per transition.
@@ -198,7 +203,7 @@ After REVIEW passes, the orchestrator handles the GIT phase directly from within
 5. **Push**: Push the branch to origin with `-u` flag: `git push -u origin <branch>`
 6. **Create PR**: Use `gh pr create` with:
    - **Title**: Short summary derived from the prompt (under 70 chars)
-   - **Body**: Include summary from plan, files changed, test results, security findings, and any outstanding TODOs
+   - **Body**: Include summary from plan, files changed, test results, security findings, outstanding TODOs, and every recorded human waiver
 7. **Update state**: Store the PR URL in `state.json` as `"pr_url"`
 8. **Report**: Display the PR URL to the user
 
@@ -207,15 +212,13 @@ After REVIEW passes, the orchestrator handles the GIT phase directly from within
 On COMPLETE:
 1. Update `state.json` with `phase: "COMPLETE"`
 2. Update `.on-loop/index.json` — set session `status: "complete"`, `completed_at`, `pr_url`
-3. **Remove worktree**: `git worktree remove .claude/worktrees/<branch-slug>`
-   - If removal fails (e.g., uncommitted changes), force with `git worktree remove --force`
-   - Clean up any remnant directory: `rm -rf .claude/worktrees/<branch-slug>`
+3. **Retain the worktree** for `/on-loop-continue` or manual inspection. Removal is an explicit `/on-loop:clear` action and must never merge a PR.
 4. Write a summary to the user including:
    - What was built (from plan)
    - Files created/modified (from `changes.log`)
    - Test results summary
    - Security findings summary
-   - Any outstanding TODOs
+   - Any outstanding TODOs and recorded human waivers
    - PR URL (from `state.json`)
 5. Report total phases completed and any retries that occurred
 

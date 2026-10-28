@@ -44,6 +44,37 @@ class PortableSkillsTests(unittest.TestCase):
                 self.assertIn("Standalone test generation", workflow)
                 self.assertIn("Generate a session name", workflow)
 
+    def test_each_exported_skill_contains_exactly_one_skill_md(self):
+        skill_names = ("quality-gate", "loop-state", "roadmap-lock", "roadmap-state")
+        for tool in exporter.SKILL_PATHS:
+            with self.subTest(tool=tool):
+                skills, count, _written = exporter.export(tool, self.project / tool)
+                self.assertEqual(count, 22)
+                skill_dirs = sorted(path for path in skills.iterdir() if path.is_dir())
+                self.assertEqual(len(skill_dirs), count)
+                for skill in skill_dirs:
+                    found = sorted(skill.rglob("SKILL.md"))
+                    self.assertEqual(found, [skill / "SKILL.md"])
+                on_loop = skills / "on-loop"
+                for name in skill_names:
+                    readme = on_loop / "references/skills" / name / "README.md"
+                    self.assertTrue(readme.is_file())
+                    self.assertFalse((readme.parent / "SKILL.md").exists())
+                self.assertIn("# Quality Gate", (on_loop / "references/skills/quality-gate/README.md").read_text())
+                for path in on_loop.rglob("*.md"):
+                    text = path.read_text()
+                    self.assertNotRegex(text, r"skills/[a-z0-9-]+/SKILL\.md")
+                self.assertIn("skills/quality-gate/README.md", (on_loop / "SKILL.md").read_text())
+                orchestrator = (on_loop / "references/agents/orchestrator.md").read_text()
+                self.assertIn("skills/quality-gate/README.md", orchestrator)
+                on_continue = (skills / "on-continue/SKILL.md").read_text()
+                self.assertIn("skills/roadmap-lock/README.md", on_continue)
+                self.assertIn("skills/roadmap-state/README.md", on_continue)
+                bundled = (on_loop / "references/commands/on-continue.md").read_text()
+                self.assertIn("skills/roadmap-state/README.md", bundled)
+                protocol = (on_loop / "references/shared/COMMUNICATION_PROTOCOL.md").read_text()
+                self.assertIn("skills/loop-state/README.md", protocol)
+
     def test_export_uses_host_models_and_preserves_role_limits(self):
         skills, _, _ = exporter.export("codex", self.project)
         for path in skills.rglob("*.md"):

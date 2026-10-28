@@ -113,6 +113,27 @@ class PortableSkillsTests(unittest.TestCase):
             exporter.export("codex", self.project)
         self.assertEqual(list(outside.iterdir()), [])
 
+    def test_symlinked_parent_of_destination_exports(self):
+        # Parents of the destination are often symlinks (macOS /tmp and /var,
+        # which tempfile uses via /var/folders). Resolving the destination
+        # must allow the export. Symlinks inside the project are covered
+        # by test_symlinked_directories_are_not_followed.
+        real_parent = self.project / "real-parent"
+        real_parent.mkdir()
+        linked_parent = self.project / "linked-parent"
+        linked_parent.symlink_to(real_parent, target_is_directory=True)
+        destination = linked_parent / "project"
+        skills, count, written = exporter.export("codex", destination)
+        self.assertEqual(count, 22)
+        self.assertGreater(written, 0)
+        self.assertEqual(skills, real_parent / "project" / ".agents" / "skills")
+        self.assertEqual(len(list(skills.glob("*/SKILL.md"))), count)
+        skill_file = real_parent / "project/.agents/skills/on-loop/SKILL.md"
+        self.assertTrue(skill_file.is_file())
+        self.assertTrue((destination / ".agents/skills/on-loop/SKILL.md").is_file())
+        for skill in skills.iterdir():
+            self.assertEqual(sorted(skill.rglob("SKILL.md")), [skill / "SKILL.md"])
+
     def test_file_where_directory_is_expected_is_preserved(self):
         conflict = self.project / ".agents"
         conflict.write_text("keep me")

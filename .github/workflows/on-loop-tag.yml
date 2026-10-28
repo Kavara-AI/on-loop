@@ -1,8 +1,8 @@
 # .github/workflows/on-loop-tag.yml
 #
-# CI for bin/on-loop-tag — safe release-tagging script.
+# CI for the release-tagging script and portable workflow exports.
 #
-# Runs shellcheck (SAST) and the 16-case bats-core test suite on every push
+# Runs shellcheck (SAST), the 16-case bats suite, and portable skill tests on push
 # and on pull requests targeting main.  The workflow is path-filtered so it
 # only executes when files relevant to the script or its tests change.
 #
@@ -10,13 +10,19 @@
 # Coding notes:   agent-notes/coding.md  (shellcheck-clean claim, D-B shim)
 # Testing notes:  agent-notes/testing.md (bats --jobs 1, OQ-4)
 
-name: on-loop-tag tests
+name: on-loop tests
 
 on:
   push:
     paths:
       - "bin/on-loop-tag"
       - "bin/on-loop-tag.md"
+      - "bin/on-loop-export"
+      - "adapters/**"
+      - "agents/**"
+      - "commands/**"
+      - "skills/**"
+      - "shared/**"
       - "tests/**"
       - "setup/fedora-bootstrap.sh"
       - "Makefile"
@@ -28,6 +34,12 @@ on:
     paths:
       - "bin/on-loop-tag"
       - "bin/on-loop-tag.md"
+      - "bin/on-loop-export"
+      - "adapters/**"
+      - "agents/**"
+      - "commands/**"
+      - "skills/**"
+      - "shared/**"
       - "tests/**"
       - "setup/fedora-bootstrap.sh"
       - "Makefile"
@@ -36,7 +48,7 @@ on:
 
 jobs:
   tag-script-tests:
-    name: shellcheck + bats
+    name: shellcheck + bats + portable skills
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -114,3 +126,6 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Run bats test suite
         run: bats --jobs 1 tests/test_on_loop_tag.bats
+
+      - name: Test portable skill exports
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v

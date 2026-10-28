@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 
@@ -94,18 +95,29 @@ def build_bundle():
 
 
 def export(tool, destination):
-    skills_root = destination.expanduser().absolute() / SKILL_PATHS[tool]
+    # Resolve the destination once. Ancestor symlinks such as macOS /tmp and
+    # /var (tempfile uses /var/folders) are normal. Refuse symlinks only from
+    # the tool directory (.agents, .gemini, .opencode) downward: the skills
+    # directory, skill directories, and files.
+    destination = Path(os.path.realpath(Path(destination).expanduser()))
+    skills_root = destination / SKILL_PATHS[tool]
     bundle = build_bundle()
+    if destination.exists() and not destination.is_dir():
+        raise ValueError(f"Expected directory: {destination}")
     # Preflight the complete export before writing anything. Existing identical
     # files are safe to reuse; differing files and symlinks require manual review.
     for name, files in bundle.items():
         for relative, contents in files.items():
             target = skills_root / name / relative
-            for path in (target, *target.parents):
+            path = target
+            while path != destination:
+                if path == path.parent:
+                    raise ValueError(f"Refusing to write outside destination: {target}")
                 if path.is_symlink():
                     raise ValueError(f"Refusing to write through a symlink: {path}")
-                if path.exists() and path != target and not path.is_dir():
+                if path != target and path.exists() and not path.is_dir():
                     raise ValueError(f"Expected directory: {path}")
+                path = path.parent
             if target.exists() and (not target.is_file() or target.read_text(encoding="utf-8") != contents):
                 raise ValueError(f"Existing file differs; preserve or remove it before re-exporting: {target}")
     written = 0

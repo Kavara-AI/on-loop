@@ -37,7 +37,10 @@ for `SKILL.md` do not load the reference copies.
 Identical exports can be repeated. If a generated file differs, the exporter
 stops before writing anything. Preserve local changes, then remove the affected
 On-Loop skill directories and export again to update. Existing unrelated skills
-are left alone. Symlinked destination paths are refused.
+are left alone. The destination path is resolved first. A symlink above that
+directory, such as macOS `/tmp` or `/var`, is allowed. Symlinks at the tool
+directory (`.agents`, `.gemini`, or `.opencode`) and anywhere under it are
+refused.
 
 Restart the host or reload its skills. In Codex, invoke a workflow explicitly:
 

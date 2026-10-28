@@ -314,8 +314,9 @@ emit_audit() {
 # leave manual reconciliation as the documented recovery (manual:118, FAQ).
 #
 # Invoked indirectly via `trap` (see main: `trap 'audit_error_signal; exit ...' INT TERM`).
-# The static analyzer cannot see the dispatch path; suppress unreachable-code noise.
-# shellcheck disable=SC2317
+# ShellCheck cannot follow this indirect dispatch: SC2317 reports unreachable
+# statements, and ShellCheck 0.11's SC2329 reports the handler as unused.
+# shellcheck disable=SC2317,SC2329
 audit_error_signal() {
   # Disable further traps to avoid re-entry.
   trap - INT TERM EXIT

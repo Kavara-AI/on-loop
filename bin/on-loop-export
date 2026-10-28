@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Export existing On-Loop workflows as self-contained Agent Skills."""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+
+
+ROOT = Path(__file__).resolve().parent.parent
+SKILL_PATHS = {
+    "codex": Path(".agents/skills"),
+    "gemini": Path(".gemini/skills"),
+    "opencode": Path(".opencode/skills"),
+    "agent-skills": Path(".agents/skills"),
+}
+
+
+def split_document(path):
+    """Read the repository's simple scalar frontmatter without a YAML dependency."""
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n") or "\n---\n" not in text[4:]:
+        raise ValueError(f"Missing frontmatter: {path}")
+    header, body = text[4:].split("\n---\n", 1)
+    fields = {}
+    for line in header.splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key in ("name", "description"):
+            fields[key] = value.strip()
+    return fields, body.lstrip()
+
+
+def portable_text(text):
+    # Remove inaccurate attribution without manufacturing a replacement identity.
+    trailer = "Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+    text = text.replace(f", ending with `{trailer}`", "")
+    text = text.replace(f". End the commit message with `{trailer}`", ".")
+    text = text.replace(f"- End with `{trailer}`", "- Use the host's actual commit attribution, if provided.")
+    text = text.replace(trailer, "")
+    # Bundled skill sources are stored as references/skills/<name>/README.md.
+    # Rewrite pointers so installed instructions open that file.
+    return re.sub(
+        r"skills/([a-z0-9]+(?:-[a-z0-9]+)*)/SKILL\.md",
+        r"skills/\1/README.md",
+        text,
+    )
+
+
+def reference_path(path, root):
+    """Return the bundle path for a source document.
+
+    The installed skill's own file is the only SKILL.md. Copies of supporting
+    skills keep their directory and use README.md so recursive SKILL.md scans
+    do not treat them as further skills.
+    """
+    relative = path.relative_to(root)
+    if relative.name == "SKILL.md":
+        relative = relative.with_name("README.md")
+    return Path("references") / relative
+
+
+def refuse_source_symlinks(root):
+    """Reject symlinked bundle inputs before they are read or written.
+
+    Path.read_text follows symlinks, so a link under the bundled trees would
+    copy outside content into every installed skill.
+    """
+
+    def reject(path):
+        if path.is_symlink():
+            raise ValueError(f"Refusing to bundle a symlinked source path: {path}")
+
+    for relative in (Path("LICENSE"), Path("adapters"), Path("adapters/portable.md")):
+        reject(root / relative)
+    for name in ("agents", "commands", "shared", "skills"):
+        base = root / name
+        reject(base)
+        if base.is_symlink() or not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+            current = Path(dirpath)
+            for entry in (*dirnames, *filenames):
+                reject(current / entry)
+
+
+def build_bundle(root=None):
+    root = ROOT if root is None else Path(root)
+    refuse_source_symlinks(root)
+    documents = sorted((root / "commands").glob("*.md"))
+    documents += sorted((root / "skills").glob("*/SKILL.md"))
+    resources = {}
+    for directory in ("agents", "commands", "shared", "skills"):
+        for path in sorted((root / directory).rglob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            if text.startswith("---\n"):
+                _, text = split_document(path)
+            key = reference_path(path, root)
+            if key in resources:
+                raise ValueError(f"Duplicate reference path: {key}")
+            resources[key] = portable_text(text)
+    resources[Path("LICENSE")] = (root / "LICENSE").read_text(encoding="utf-8")
+    runtime = portable_text((root / "adapters/portable.md").read_text(encoding="utf-8"))
+    bundle = {}
+    for source in documents:
+        fields, body = split_document(source)
+        name = fields.get("name", "")
+        description = fields.get("description", "")
+        if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) or len(name) > 64:
+            raise ValueError(f"Invalid skill name in {source}")
+        if not 1 <= len(description) <= 1024:
+            raise ValueError(f"Invalid description in {source}")
+        if name in bundle:
+            raise ValueError(f"Duplicate skill name: {name}")
+        header = f"---\nname: {name}\ndescription: {json.dumps(description, ensure_ascii=False)}\nlicense: Apache-2.0\n---\n\n"
+        bundle[name] = {
+            Path("SKILL.md"): header + runtime + "\n" + portable_text(body),
+            **resources,
+        }
+    return bundle
+
+
+def export(tool, destination, root=None):
+    # Resolve the destination once. Ancestor symlinks such as macOS /tmp and
+    # /var (tempfile uses /var/folders) are normal. Refuse symlinks only from
+    # the tool directory (.agents, .gemini, .opencode) downward: the skills
+    # directory, skill directories, and files.
+    destination = Path(os.path.realpath(Path(destination).expanduser()))
+    skills_root = destination / SKILL_PATHS[tool]
+    bundle = build_bundle(root)
+    if destination.exists() and not destination.is_dir():
+        raise ValueError(f"Expected directory: {destination}")
+    # Preflight the complete export before writing anything. Existing identical
+    # files are safe to reuse; differing files and symlinks require manual review.
+    for name, files in bundle.items():
+        for relative, contents in files.items():
+            target = skills_root / name / relative
+            path = target
+            while path != destination:
+                if path == path.parent:
+                    raise ValueError(f"Refusing to write outside destination: {target}")
+                if path.is_symlink():
+                    raise ValueError(f"Refusing to write through a symlink: {path}")
+                if path != target and path.exists() and not path.is_dir():
+                    raise ValueError(f"Expected directory: {path}")
+                path = path.parent
+            if target.exists() and (not target.is_file() or target.read_text(encoding="utf-8") != contents):
+                raise ValueError(f"Existing file differs; preserve or remove it before re-exporting: {target}")
+    written = 0
+    for name, files in bundle.items():
+        for relative, contents in files.items():
+            target = skills_root / name / relative
+            if not target.exists():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(contents, encoding="utf-8")
+                written += 1
+    return skills_root, len(bundle), written
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tool", choices=SKILL_PATHS, required=True)
+    parser.add_argument("--destination", type=Path, required=True, help="Project root (not the skills directory)")
+    args = parser.parse_args()
+    try:
+        path, count, written = export(args.tool, args.destination)
+    except (OSError, ValueError) as error:
+        parser.exit(1, f"error: {error}\n")
+    print(f"Exported {count} skills to {path} ({written} new files). Restart or reload skills in your coding tool.")
+
+
+if __name__ == "__main__":
+    main()

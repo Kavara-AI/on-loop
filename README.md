@@ -1,6 +1,6 @@
 # On-Loop
 
-Spec-driven SDLC plugin for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that orchestrates specialist agents through a full development lifecycle with security-first engineering practices.
+Spec-driven SDLC workflows for AI coding tools: a native [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin and portable Agent Skills for Codex, Gemini CLI, OpenCode, and compatible hosts. Specialist roles guide a full development lifecycle with security-first engineering practices.
 
 ## What It Does
 
@@ -12,9 +12,25 @@ Prompt → Worktree → Branch → Spec → Plan → Code → Test → Security 
 
 Each phase is handled by a specialist agent operating as a Staff Engineer with ISC2 certifications, building for regulated financial environments and critical infrastructure.
 
-Each session operates in its own **git worktree**, so multiple sessions can run concurrently on the same repo without interference. Session logs are persisted in the repo as an audit trail.
+The native Claude plugin gives each session its own **git worktree**, so multiple sessions can run concurrently on the same repo without interference. Portable workflows follow the host's workspace policy and reuse isolated cloud checkouts. Session logs are persisted in the repo as an audit trail.
 
 ## Installation
+
+### Codex, Gemini CLI, OpenCode, and other Agent Skills hosts
+
+From this checkout, export the workflows into your project (Python 3.9+):
+
+```bash
+python3 bin/on-loop-export --tool codex --destination /path/to/your-project
+# Other targets: --tool gemini, --tool opencode, --tool agent-skills
+```
+
+The portable workflows use the model/provider selected in your coding tool.
+They retain the existing roles and quality gates, with sequential execution when
+delegation is unavailable. See [portable tool setup](docs/portable-tools.md) for
+invocation, permissions, and differences from the native Claude plugin.
+
+### Claude Code
 
 ### Option 1: Marketplace (recommended)
 
@@ -105,7 +121,10 @@ This tool implements the **canonical-state-verification iteration** of [mise-en-
 
 ## Agents
 
-| Agent | Model | Role |
+The native Claude plugin uses the defaults below. Portable skills inherit the
+host's model selection for every role.
+
+| Agent | Claude default | Role |
 |-------|-------|------|
 | Orchestrator | Opus | Pipeline control, quality gates, retry logic, worktree/session lifecycle |
 | Architect | Opus | Spec generation, ADRs, system design |

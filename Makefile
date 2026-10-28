@@ -9,7 +9,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test lint check install uninstall
+.PHONY: help test test-portable lint check install uninstall
 
 # ---------------------------------------------------------------------------
 # help — list all targets with descriptions
@@ -17,7 +17,8 @@ SHELL := /bin/bash
 help:
 	@printf '%-20s %s\n' "Target" "Description"
 	@printf '%-20s %s\n' "------" "-----------"
-	@printf '%-20s %s\n' "test"      "Run bats test suite (16 cases)"
+	@printf '%-20s %s\n' "test"      "Run Bats and portable skill tests"
+	@printf '%-20s %s\n' "test-portable" "Run portable skill tests (Python 3)"
 	@printf '%-20s %s\n' "lint"      "Run shellcheck on bin/on-loop-tag"
 	@printf '%-20s %s\n' "check"     "Smoke-check bin/on-loop-tag --version"
 	@printf '%-20s %s\n' "install"   "Symlink bin/on-loop-tag to ~/.local/bin/"
@@ -38,6 +39,10 @@ test:
 		exit 1; \
 	fi
 	bats --jobs 1 tests/test_on_loop_tag.bats
+	$(MAKE) test-portable
+
+test-portable:
+	python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 # ---------------------------------------------------------------------------
 # lint — shellcheck SAST

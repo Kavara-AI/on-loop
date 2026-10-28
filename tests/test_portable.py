@@ -3,6 +3,7 @@
 import importlib.machinery
 import importlib.util
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -140,6 +141,52 @@ class PortableSkillsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Expected directory"):
             exporter.export("codex", self.project)
         self.assertEqual(conflict.read_text(), "keep me")
+
+    def _copy_repo(self, name):
+        destination = self.project / name
+        shutil.copytree(ROOT, destination, ignore=shutil.ignore_patterns(".git"))
+        return destination
+
+    def _assert_source_symlink_refused(self, repo, destination):
+        original = exporter.ROOT
+        exporter.ROOT = repo
+        try:
+            with self.assertRaisesRegex(ValueError, "symlinked source"):
+                exporter.export("codex", destination)
+        finally:
+            exporter.ROOT = original
+        self.assertFalse(destination.exists())
+
+    def test_symlinked_source_is_refused_before_any_write(self):
+        outside = self.project / "outside.md"
+        outside.write_text("outside-secret-content\n")
+        outside_dir = self.project / "outside-dir"
+        outside_dir.mkdir()
+        (outside_dir / "secret.md").write_text("outside-secret-content\n")
+
+        with self.subTest(kind="file"):
+            repo = self._copy_repo("file-repo")
+            (repo / "agents" / "x.md").symlink_to(outside)
+            self._assert_source_symlink_refused(repo, self.project / "file-dest")
+
+        with self.subTest(kind="directory"):
+            repo = self._copy_repo("dir-repo")
+            (repo / "agents" / "linked-dir").symlink_to(outside_dir, target_is_directory=True)
+            self._assert_source_symlink_refused(repo, self.project / "dir-dest")
+
+        with self.subTest(kind="license"):
+            repo = self._copy_repo("license-repo")
+            license_path = repo / "LICENSE"
+            license_path.unlink()
+            license_path.symlink_to(outside)
+            self._assert_source_symlink_refused(repo, self.project / "license-dest")
+
+        with self.subTest(kind="portable-adapter"):
+            repo = self._copy_repo("adapter-repo")
+            portable = repo / "adapters" / "portable.md"
+            portable.unlink()
+            portable.symlink_to(outside)
+            self._assert_source_symlink_refused(repo, self.project / "adapter-dest")
 
     def test_cli_rejects_unknown_tool_and_requires_destination(self):
         for arguments in (["--tool", "unknown"], ["--tool", "codex"]):

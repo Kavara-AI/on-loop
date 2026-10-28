@@ -7,7 +7,7 @@ precedence over tool-specific assumptions in the reference documents.
   responsibilities, not model IDs. Do not switch providers, request another
   provider's key, or assume Opus/Sonnet are available.
 - Resolve instruction paths such as `agents/coding.md`, `commands/on-test.md`,
-  `skills/quality-gate/SKILL.md`, and `shared/AGENT_PERSONA.md` relative to this
+  `skills/quality-gate/README.md`, and `shared/AGENT_PERSONA.md` relative to this
   skill's `references/` directory. Resolve project paths (`.on-loop/`, source
   files, roadmap, Git metadata) relative to the user's project. Never write
   session state or application code into the installed skill directory.

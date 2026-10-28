@@ -28,6 +28,12 @@ does not depend on the original On-Loop checkout after installation and does not
 copy Git metadata, session logs, credentials, or Claude's hooks/settings. It does
 not install the host coding tool itself or the separate `on-loop-tag` CLI.
 
+Supporting skill sources are stored as `references/skills/<name>/README.md`.
+Paths in the bundled instructions that referred to `skills/<name>/SKILL.md`
+point at that README. The only file named `SKILL.md` in an installed skill
+directory is that skill's own file, so hosts that discover skills by scanning
+for `SKILL.md` do not load the reference copies.
+
 Identical exports can be repeated. If a generated file differs, the exporter
 stops before writing anything. Preserve local changes, then remove the affected
 On-Loop skill directories and export again to update. Existing unrelated skills
@@ -72,8 +78,9 @@ make test-portable
 make lint test check
 ```
 
-The portable tests exercise all target paths, complete reference bundles, model
-inheritance, repeated installation, conflicts, symlink protection, and CLI errors.
+The portable tests exercise all target paths, complete reference bundles, one
+`SKILL.md` per installed skill, model inheritance, repeated installation,
+conflicts, symlink protection, and CLI errors.
 They run locally without provider credentials. A passing export test does not
 establish that a live model completed the SDLC pipeline in another host.
 

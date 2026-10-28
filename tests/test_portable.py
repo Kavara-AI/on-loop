@@ -37,7 +37,7 @@ class PortableSkillsTests(unittest.TestCase):
                     self.assertIn("Portable runtime rules", body)
                     self.assertTrue((skill / "references/agents/coding.md").is_file())
                     self.assertTrue((skill / "references/commands/on-loop.md").is_file())
-                    self.assertTrue((skill / "references/skills/quality-gate/SKILL.md").is_file())
+                    self.assertTrue((skill / "references/skills/quality-gate/README.md").is_file())
                     self.assertTrue((skill / "references/shared/AGENT_PERSONA.md").is_file())
                     self.assertTrue((skill / "LICENSE").is_file())
                 workflow = (skills / "on-test/SKILL.md").read_text()

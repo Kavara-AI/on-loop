@@ -36,7 +36,27 @@ def portable_text(text):
     text = text.replace(f", ending with `{trailer}`", "")
     text = text.replace(f". End the commit message with `{trailer}`", ".")
     text = text.replace(f"- End with `{trailer}`", "- Use the host's actual commit attribution, if provided.")
-    return text.replace(trailer, "")
+    text = text.replace(trailer, "")
+    # Bundled skill sources are stored as references/skills/<name>/README.md.
+    # Rewrite pointers so installed instructions open that file.
+    return re.sub(
+        r"skills/([a-z0-9]+(?:-[a-z0-9]+)*)/SKILL\.md",
+        r"skills/\1/README.md",
+        text,
+    )
+
+
+def reference_path(path, root):
+    """Return the bundle path for a source document.
+
+    The installed skill's own file is the only SKILL.md. Copies of supporting
+    skills keep their directory and use README.md so recursive SKILL.md scans
+    do not treat them as further skills.
+    """
+    relative = path.relative_to(root)
+    if relative.name == "SKILL.md":
+        relative = relative.with_name("README.md")
+    return Path("references") / relative
 
 
 def build_bundle():
@@ -48,9 +68,12 @@ def build_bundle():
             text = path.read_text(encoding="utf-8")
             if text.startswith("---\n"):
                 _, text = split_document(path)
-            resources[Path("references") / path.relative_to(ROOT)] = portable_text(text)
+            key = reference_path(path, ROOT)
+            if key in resources:
+                raise ValueError(f"Duplicate reference path: {key}")
+            resources[key] = portable_text(text)
     resources[Path("LICENSE")] = (ROOT / "LICENSE").read_text(encoding="utf-8")
-    runtime = (ROOT / "adapters/portable.md").read_text(encoding="utf-8")
+    runtime = portable_text((ROOT / "adapters/portable.md").read_text(encoding="utf-8"))
     bundle = {}
     for source in documents:
         fields, body = split_document(source)

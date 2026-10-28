@@ -40,7 +40,9 @@ On-Loop skill directories and export again to update. Existing unrelated skills
 are left alone. The destination path is resolved first. A symlink above that
 directory, such as macOS `/tmp` or `/var`, is allowed. Symlinks at the tool
 directory (`.agents`, `.gemini`, or `.opencode`) and anywhere under it are
-refused.
+refused. Symlinked files or directories in this checkout are refused before
+any skill file is written. That includes `agents/`, `commands/`, `shared/`,
+`skills/`, `LICENSE`, and `adapters/portable.md`.
 
 Restart the host or reload its skills. In Codex, invoke a workflow explicitly:
 
@@ -83,7 +85,8 @@ make lint test check
 
 The portable tests exercise all target paths, complete reference bundles, one
 `SKILL.md` per installed skill, model inheritance, repeated installation,
-conflicts, symlink protection, and CLI errors.
+conflicts, symlinked destination parents, symlinks inside the tool directory,
+symlinked bundle sources, and CLI errors.
 They run locally without provider credentials. A passing export test does not
 establish that a live model completed the SDLC pipeline in another host.
 

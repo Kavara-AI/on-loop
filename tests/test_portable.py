@@ -148,13 +148,8 @@ class PortableSkillsTests(unittest.TestCase):
         return destination
 
     def _assert_source_symlink_refused(self, repo, destination):
-        original = exporter.ROOT
-        exporter.ROOT = repo
-        try:
-            with self.assertRaisesRegex(ValueError, "symlinked source"):
-                exporter.export("codex", destination)
-        finally:
-            exporter.ROOT = original
+        with self.assertRaisesRegex(ValueError, "symlinked source"):
+            exporter.export("codex", destination, root=repo)
         self.assertFalse(destination.exists())
 
     def test_symlinked_source_is_refused_before_any_write(self):

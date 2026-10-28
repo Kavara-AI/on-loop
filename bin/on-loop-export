@@ -60,21 +60,47 @@ def reference_path(path, root):
     return Path("references") / relative
 
 
-def build_bundle():
-    documents = sorted((ROOT / "commands").glob("*.md"))
-    documents += sorted((ROOT / "skills").glob("*/SKILL.md"))
+def refuse_source_symlinks(root):
+    """Reject symlinked bundle inputs before they are read or written.
+
+    Path.read_text follows symlinks, so a link under the bundled trees would
+    copy outside content into every installed skill.
+    """
+
+    def reject(path):
+        if path.is_symlink():
+            raise ValueError(f"Refusing to bundle a symlinked source path: {path}")
+
+    for relative in (Path("LICENSE"), Path("adapters"), Path("adapters/portable.md")):
+        reject(root / relative)
+    for name in ("agents", "commands", "shared", "skills"):
+        base = root / name
+        reject(base)
+        if base.is_symlink() or not base.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+            current = Path(dirpath)
+            for entry in (*dirnames, *filenames):
+                reject(current / entry)
+
+
+def build_bundle(root=None):
+    root = ROOT if root is None else Path(root)
+    refuse_source_symlinks(root)
+    documents = sorted((root / "commands").glob("*.md"))
+    documents += sorted((root / "skills").glob("*/SKILL.md"))
     resources = {}
     for directory in ("agents", "commands", "shared", "skills"):
-        for path in sorted((ROOT / directory).rglob("*.md")):
+        for path in sorted((root / directory).rglob("*.md")):
             text = path.read_text(encoding="utf-8")
             if text.startswith("---\n"):
                 _, text = split_document(path)
-            key = reference_path(path, ROOT)
+            key = reference_path(path, root)
             if key in resources:
                 raise ValueError(f"Duplicate reference path: {key}")
             resources[key] = portable_text(text)
-    resources[Path("LICENSE")] = (ROOT / "LICENSE").read_text(encoding="utf-8")
-    runtime = portable_text((ROOT / "adapters/portable.md").read_text(encoding="utf-8"))
+    resources[Path("LICENSE")] = (root / "LICENSE").read_text(encoding="utf-8")
+    runtime = portable_text((root / "adapters/portable.md").read_text(encoding="utf-8"))
     bundle = {}
     for source in documents:
         fields, body = split_document(source)
@@ -94,14 +120,14 @@ def build_bundle():
     return bundle
 
 
-def export(tool, destination):
+def export(tool, destination, root=None):
     # Resolve the destination once. Ancestor symlinks such as macOS /tmp and
     # /var (tempfile uses /var/folders) are normal. Refuse symlinks only from
     # the tool directory (.agents, .gemini, .opencode) downward: the skills
     # directory, skill directories, and files.
     destination = Path(os.path.realpath(Path(destination).expanduser()))
     skills_root = destination / SKILL_PATHS[tool]
-    bundle = build_bundle()
+    bundle = build_bundle(root)
     if destination.exists() and not destination.is_dir():
         raise ValueError(f"Expected directory: {destination}")
     # Preflight the complete export before writing anything. Existing identical

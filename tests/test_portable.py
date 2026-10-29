@@ -2,6 +2,7 @@
 
 import importlib.machinery
 import importlib.util
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -28,7 +29,10 @@ class PortableSkillsTests(unittest.TestCase):
             with self.subTest(tool=tool):
                 project = self.project / tool
                 skills, count, written = exporter.export(tool, project)
-                self.assertEqual(skills, project / relative)
+                self.assertEqual(
+                    Path(os.path.realpath(skills)),
+                    Path(os.path.realpath(project / relative)),
+                )
                 self.assertEqual(count, 22)
                 self.assertGreater(written, count)
                 self.assertEqual(len(list(skills.glob("*/SKILL.md"))), count)
@@ -127,7 +131,10 @@ class PortableSkillsTests(unittest.TestCase):
         skills, count, written = exporter.export("codex", destination)
         self.assertEqual(count, 22)
         self.assertGreater(written, 0)
-        self.assertEqual(skills, real_parent / "project" / ".agents" / "skills")
+        self.assertEqual(
+            Path(os.path.realpath(skills)),
+            Path(os.path.realpath(real_parent / "project" / ".agents" / "skills")),
+        )
         self.assertEqual(len(list(skills.glob("*/SKILL.md"))), count)
         skill_file = real_parent / "project/.agents/skills/on-loop/SKILL.md"
         self.assertTrue(skill_file.is_file())

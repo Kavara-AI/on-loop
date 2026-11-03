@@ -1,10 +1,10 @@
 name: Bets local lifecycle
 on:
   pull_request:
-    paths: ['bets/**', 'tests/test_bets.py', 'examples/bets/**', '.github/workflows/bets.yml']
+    paths: ['bets/**', 'tests/test_bets*.py', 'examples/bets/**', '.github/workflows/bets.yml']
   push:
     branches: [main]
-    paths: ['bets/**', 'tests/test_bets.py', 'examples/bets/**', '.github/workflows/bets.yml']
+    paths: ['bets/**', 'tests/test_bets*.py', 'examples/bets/**', '.github/workflows/bets.yml']
 permissions:
   contents: read
 jobs:
@@ -13,5 +13,5 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - run: python3 -m unittest discover -s tests -p test_bets.py -v
+      - run: python3 -m unittest discover -s tests -p 'test_bets*.py' -v
       - run: python3 -m examples.bets.demo /tmp/bets-book.html

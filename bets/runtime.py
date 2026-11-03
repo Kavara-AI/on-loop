@@ -203,7 +203,7 @@ def bounded_command(argv, input_value, seconds):
     return dict(exit_code=code, stdout_sha256=digest.hexdigest())
 
 
-def run(store, iri, worker, oracle):
+def run(store, iri, worker, oracle, before_oracle=None):
     """One bounded worker/oracle attempt; an abandoned reservation never replays."""
     admitted = store.reserve(iri)
     if admitted is None:
@@ -217,6 +217,8 @@ def run(store, iri, worker, oracle):
         if receipt["worker"]["exit_code"] != 0:
             status, reason = "inconclusive", "worker failed or timed out"
         else:
+            if before_oracle is not None:
+                before_oracle()
             receipt["oracle"] = bounded_command(oracle, dict(state=state, receipt=receipt),
                                                    deadline - time.monotonic())
             status = {0: "won", 10: "killed", 20: "inconclusive"}.get(

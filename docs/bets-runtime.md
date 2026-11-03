@@ -97,3 +97,67 @@ Next integration: implement the same lifecycle against the accepted PostgreSQL
 event schema, bind the configured worker to an existing agent and oracle, and
 exercise one real bet with its actual permitted inputs. Public examples remain
 synthetic; private workstream plans/credentials must not be committed here.
+
+## Binding an existing execution driver
+
+`python3 -m bets.launch` adds a checked handoff to an existing bet; it never opens
+or retries a bet automatically. The local manifest must be held in the existing
+private execution workspace. Supply its SHA256 independently and add that exact
+value as `launch_manifest_sha256` in the bet's opening spec. Do not commit real
+host names, credentials, model/data paths or private manifests to this repository.
+
+Manifest shape (illustrative paths only; replace every digest with measured bytes):
+
+```json
+{
+  "run_owner": "existing sole execution owner",
+  "resource_id": "existing permitted resource",
+  "authority_ref": "existing named-run approval reference",
+  "spend_control_ref": "independently verified provider/worker control reference",
+  "worker": ["/canonical/python", "/private/approved_worker.py"],
+  "worker_entrypoint": "/private/approved_worker.py",
+  "oracle": ["/canonical/python", "/private/protected_oracle.py"],
+  "oracle_entrypoint": "/private/protected_oracle.py",
+  "pins": [
+    {"path": "/canonical/python", "sha256": "MEASURED_SHA256"},
+    {"path": "/private/approved_worker.py", "sha256": "MEASURED_SHA256"},
+    {"path": "/private/protected_oracle.py", "sha256": "MEASURED_SHA256"}
+  ]
+}
+```
+
+Also pin the approved protocol and permitted input/model manifests. Files must
+be regular files at absolute canonical paths; links and duplicate pins refuse.
+Commands must be pinned executable wrappers, or an interpreter immediately
+followed by its pinned script. Interpreter flags/inline-code entrypoints are not
+accepted by this adapter. All pins and the manifest are rechecked after worker
+completion before the oracle is dispatched. The bet opening event binds the
+manifest digest, so changed commands cannot be silently rebound to an old bet.
+
+```bash
+# Default is check-only: no worker, oracle, or reservation.
+python3 -m bets.launch --db /private/work/bets.db --iri urn:uuid:EXISTING-ID \
+  --manifest /private/work/launch.json --manifest-sha256 MEASURED_SHA256
+# --execute is explicit, and is for an already authorised trusted host only.
+```
+
+**Independent review: real paid/untrusted-agent dispatch is not approved by this
+prototype.** The original local process-group timeout depends on the driver
+surviving. A reviewer killed the driver and reproduced a child continuing past
+its deadline. Before any real paid dispatch, the existing host must provide an
+independently surviving watchdog/resource timeout and verified cost controls.
+A worker with the same filesystem privileges can tamper with its oracle, journal
+or inputs: digest rechecks catch ordinary changes, but cannot establish hostile
+process isolation. The oracle and journal need independently protected custody
+on the actual execution host. The launcher does not provide that isolation.
+
+`authority_ref` and `spend_control_ref` are required descriptive references, not
+verified grants or enforcement mechanisms. A check result establishes local byte
+bindings only, never access authority, model provenance beyond the pinned files,
+provider-budget enforcement or scientific validity. No host should be started
+and no tenant key should be copied merely to populate this manifest.
+
+Current handoff requires: access to the existing execution host, reconciliation
+with its sole driver, local tenant-key binding, protocol acceptance, measured
+external timeout/spend controls, and protected oracle custody. Keep these as
+explicit unresolved prerequisites; do not infer them from a successful local test.

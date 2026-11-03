@@ -99,6 +99,14 @@ class LaunchTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_manifest(self.path, self.sha)
 
+    def test_interpreter_cannot_be_declared_a_direct_wrapper_with_extra_args(self):
+        self.manifest["worker_entrypoint"] = self.manifest["worker"][0]
+        self.manifest["oracle_entrypoint"] = self.manifest["oracle"][0]
+        self.manifest["pins"] = self.manifest["pins"][:1]
+        self.write_manifest()
+        with self.assertRaises(ValueError):
+            load_manifest(self.path, self.sha)
+
     def test_symlink_or_nonregular_file_is_not_a_valid_pin(self):
         link = self.root / "link"
         link.symlink_to(self.worker)

@@ -52,7 +52,9 @@ def load_manifest(path, expected):
         entrypoint = manifest.get(field + "_entrypoint")
         if entrypoint not in seen:
             raise ValueError("command entrypoint must be pinned")
-        if argv[0] != entrypoint and (len(argv) < 2 or argv[1] != entrypoint):
+        direct = len(argv) == 1 and argv[0] == entrypoint
+        interpreted = len(argv) >= 2 and argv[0] != entrypoint and argv[1] == entrypoint
+        if not (direct or interpreted):
             raise ValueError("use a pinned executable wrapper or interpreter plus pinned script")
     if manifest["worker"] == manifest["oracle"]:
         raise ValueError("worker and oracle commands must be separate")

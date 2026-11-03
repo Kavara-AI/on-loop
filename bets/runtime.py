@@ -2,12 +2,9 @@
 import argparse
 import contextlib
 import datetime as dt
-import hashlib
 import html
 import json
-import os
 from pathlib import Path
-import signal
 import sqlite3
 import subprocess
 import sys
@@ -175,32 +172,35 @@ class Store:
 
 
 def bounded_command(argv, input_value, seconds):
-    """Run explicit argv, never a shell; discard raw output after hashing."""
+    """Delegate worker ownership/deadline to an independent local supervisor."""
     if not argv or seconds <= 0:
         raise ValueError("command and positive remaining time required")
-    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as input_file:
-        input_file.write(encode(input_value).encode())
+    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as input_file, tempfile.TemporaryFile() as result:
+        config = dict(argv=argv, payload=input_value, deadline_monotonic=time.monotonic() + seconds)
+        input_file.write(encode(config).encode())
         input_file.seek(0)
-        process = subprocess.Popen(argv, stdin=input_file, stdout=output,
+        fds = (input_file.fileno(), output.fileno(), result.fileno())
+        supervisor = Path(__file__).with_name("supervisor.py")
+        process = subprocess.Popen([sys.executable, str(supervisor), *(str(fd) for fd in fds)],
+                                   pass_fds=fds, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL, start_new_session=True)
         try:
-            code = process.wait(timeout=seconds)
+            process.wait(timeout=seconds + 5)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.wait()
-            code = -signal.SIGKILL
-        finally:
-            # Descendants in the process group cannot outlive the local attempt.
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            process.wait()
-        output.seek(0)
-        digest = hashlib.sha256()
-        for chunk in iter(lambda: output.read(65536), b""):
-            digest.update(chunk)
-    return dict(exit_code=code, stdout_sha256=digest.hexdigest())
+            # Do not kill the independent owner and orphan its worker.
+            raise ValueError("supervisor result unavailable") from None
+        if process.returncode != 0:
+            raise ValueError("supervisor failed; execution outcome is uncertain")
+        result.seek(0)
+        try:
+            receipt = json.load(result)
+        except (ValueError, UnicodeError):
+            raise ValueError("supervisor receipt unavailable") from None
+        if receipt.get("failure_type") == "FileNotFoundError":
+            raise FileNotFoundError("worker executable unavailable")
+        if "failure_type" in receipt:
+            raise OSError("worker launch refused")
+        return receipt
 
 
 def run(store, iri, worker, oracle, before_oracle=None):

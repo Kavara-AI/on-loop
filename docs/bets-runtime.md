@@ -65,8 +65,9 @@ in argv, specs or artifacts. A worker must persist useful diagnostics privately.
 Opening performs lexical recall and stores the matching prior bet references in
 the immutable opening event, including prior kills. This is not semantic recall.
 Each local dispatch transactionally reserves its declared maximum allocation
-before spawning. A worker and oracle share the original deadline; local process
-groups are killed on timeout/exit. SQLite write serialization prevents a second
+before spawning. A worker and oracle share the original deadline. A separate local supervisor
+launches each command and kills its ordinary process group on timeout/exit, even
+if the calling driver is SIGKILLed. SQLite write serialization prevents a second
 controller dispatching the same bet. A crash leaves an active attempt and its
 reservation in place: replacement execution is refused, never automatically
 replayed. Manual reconciliation of abandoned attempts is not implemented here.
@@ -142,10 +143,18 @@ python3 -m bets.launch --db /private/work/bets.db --iri urn:uuid:EXISTING-ID \
 ```
 
 **Independent review: real paid/untrusted-agent dispatch is not approved by this
-prototype.** The original local process-group timeout depends on the driver
-surviving. A reviewer killed the driver and reproduced a child continuing past
-its deadline. Before any real paid dispatch, the existing host must provide an
-independently surviving watchdog/resource timeout and verified cost controls.
+prototype.** The original revision depended on the driver surviving; review reproduced a
+worker continuing past its deadline after driver SIGKILL. The runtime now starts
+an independent local supervisor, which itself spawns the worker and owns the
+original monotonic deadline. Local tests kill the driver after the worker and an
+ordinary grandchild start, and verify neither can write its delayed marker.
+The supervisor receives anonymous file descriptors, not named payload files.
+An abandoned bet still retains its unresolved reservation and is not replayed.
+This closes the reproduced driver-death gap only: supervisor death, host failure,
+worker privilege to kill the supervisor, and deliberately escaped sessions remain
+outside the guarantee. Before any real paid dispatch, the existing host must
+verify this supervision or an equivalent external resource timeout, plus actual
+cost controls.
 A worker with the same filesystem privileges can tamper with its oracle, journal
 or inputs: digest rechecks catch ordinary changes, but cannot establish hostile
 process isolation. The oracle and journal need independently protected custody
@@ -161,3 +170,5 @@ Current handoff requires: access to the existing execution host, reconciliation
 with its sole driver, local tenant-key binding, protocol acceptance, measured
 external timeout/spend controls, and protected oracle custody. Keep these as
 explicit unresolved prerequisites; do not infer them from a successful local test.
+
+Supervisor regression suite: `python3 -m unittest discover -s tests -p "test_bets*.py" -v`. Local supervisor operation does not enforce provider billing or authorise a remote run.
